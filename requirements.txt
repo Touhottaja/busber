@@ -1,1 +1,2 @@
 pyusb==1.2.1
+colorlog==6.8.2

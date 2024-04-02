@@ -1,8 +1,31 @@
+import colorlog
+import logging
 import threading
 import usb.core
 import usb.util
 from enum import Enum
 
+# Set up logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO)
+
+formatter = colorlog.ColoredFormatter(
+    "%(log_color)s%(asctime)s - %(levelname)s - %(message)s",
+    log_colors={
+        'DEBUG': 'cyan',
+        'INFO': 'green',
+        'WARNING': 'yellow',
+        'ERROR': 'red',
+        'CRITICAL': 'red,bg_white',
+    })
+
+console_handler.setFormatter(formatter)
+logger.addHandler(console_handler)
+
+# Global variables
 read_devices = []
 
 
@@ -33,11 +56,11 @@ class USBClass(Enum):
 
 def main() -> None:
     # Read initial devices
-    print("Initial devices:")
+    logger.info("Initial devices:")
     for device in usb.core.find(find_all=True):
         read_devices.append(device)
         print_device_information(device)
-    print("-----------------------------------")
+    logger.info("")
 
     # Create a separate thread for monitoring devices
     monitor_thread = threading.Thread(target=monitor_devices)
@@ -50,7 +73,7 @@ def monitor_devices():
         for device in new_devices:
             if device in read_devices:
                 continue
-            print("New device found:")
+            logger.warning("New device found:")
             read_devices.append(device)
             print_device_information(device)
             read_input_from_device(device)
@@ -58,9 +81,10 @@ def monitor_devices():
 
 def print_device_information(device: usb.core.Device) -> None:
     device_class = USBClass(device.bDeviceClass)
-    print(f"Class: {device_class.name}, "\
-          f"Vendor ID: {device.idVendor}, " \
-          f"Product ID: {device.idProduct}")
+    device_info = f"Class: {device_class.name}, "\
+                  f"Vendor ID: {device.idVendor}, " \
+                  f"Product ID: {device.idProduct}"
+    logger.info(device_info)
 
 
 def read_input_from_device(device: usb.core.Device) -> None:
@@ -69,9 +93,9 @@ def read_input_from_device(device: usb.core.Device) -> None:
         try:
             data = device.read(endpoint.bEndpointAddress,
                                endpoint.wMaxPacketSize)
-            print(f"Received data: {data}")
+            logger.info(f"Received data: {data}")
         except usb.core.USBError as e:
-            print(f"Error reading data from device: {e}")
+            logger.error(f"Error reading data from device: {e}")
             break
 
 
