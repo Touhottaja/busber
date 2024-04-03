@@ -16,7 +16,7 @@ formatter = colorlog.ColoredFormatter(
     "%(log_color)s%(asctime)s - %(levelname)s - %(message)s",
     log_colors={
         'DEBUG': 'cyan',
-        'INFO': 'green',
+        'INFO': 'white',
         'WARNING': 'yellow',
         'ERROR': 'red',
         'CRITICAL': 'red,bg_white',
@@ -27,6 +27,28 @@ logger.addHandler(console_handler)
 
 # Global variables
 read_devices = []
+
+# USB HID scancodes
+SCANCODES = {
+    # Letters
+    4: 'a', 5: 'b', 6: 'c', 7: 'd', 8: 'e', 9: 'f', 10: 'g', 11: 'h', 12: 'i',
+    13: 'j', 14: 'k', 15: 'l', 16: 'm', 17: 'n', 18: 'o', 19: 'p', 20: 'q',
+    21: 'r', 22: 's', 23: 't', 24: 'u', 25: 'v', 26: 'w', 27: 'x', 28: 'y',
+    29: 'z',
+    # Numbers
+    30: '1', 31: '2', 32: '3', 33: '4', 34: '5', 35: '6', 36: '7',37: '8',
+    38: '9', 39: '0',
+    # Special keys
+    40: '[ENTER]', 41: '[ESC]', 42: '[BACKSPACE]', 43: '[TAB]', 44: '[SPACE]',
+    57: '[CAPSLOCK]', 225: '[LEFTSHIFT]', 229: '[RIGHTSHIFT]', 226: '[LEFTALT]',
+    230: '[RIGHTALT]', 224: '[LEFTCTRL]', 228: '[RIGHTCTRL]', 227: '[LEFTMETA]',
+    231: '[RIGHTMETA]',
+    # Function keys
+    58: '[F1]', 59: '[F2]', 60: '[F3]', 61: '[F4]', 62: '[F5]', 63: '[F6]',
+    64: '[F7]', 65: '[F8]', 66: '[F9]', 67: '[F10]', 68: '[F11]', 69: '[F12]',
+}
+
+DEVICE_READ_TIMEOUT_S = 5 * 1000
 
 
 class USBClass(Enum):
@@ -89,14 +111,35 @@ def print_device_information(device: usb.core.Device) -> None:
 
 def read_input_from_device(device: usb.core.Device) -> None:
     endpoint = device[0][(0,0)][0]
+    interface_number = \
+        device.configurations()[0].interfaces()[0].bInterfaceNumber
+
+    # If the device is using a kernel driver, detach it
+    if device.is_kernel_driver_active(interface_number):
+        try:
+            device.detach_kernel_driver(interface_number)
+            logger.warning("Kernel driver detached from interface" \
+                           f"{interface_number}")
+        except usb.core.USBError as e:
+            logger.error(f"Error detaching kernel driver: {e}")
+            return
+
+    # Claim the interface
+    ascii_data = ""
     while True:
         try:
             data = device.read(endpoint.bEndpointAddress,
-                               endpoint.wMaxPacketSize)
-            logger.info(f"Received data: {data}")
+                               endpoint.wMaxPacketSize,
+                               timeout=DEVICE_READ_TIMEOUT_S)
+            ascii_data += "".join(
+                [SCANCODES.get(code, "") for code in data[2:] if code != 0])
+            logger.info(ascii_data)
         except usb.core.USBError as e:
+            if e.errno == 19:
+                logger.error("Device disconnected")
+                break
             logger.error(f"Error reading data from device: {e}")
-            break
+            continue
 
 
 if __name__ == "__main__":

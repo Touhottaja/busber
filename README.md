@@ -14,3 +14,8 @@ $ source [<Path to your venv>]/bin/activate
 ```sh
 $ pip3 install -r requirements.txt
 ```
+
+## Running
+```sh
+sudo [<Path to your venv>]/bin/python3 busber.py
+```
