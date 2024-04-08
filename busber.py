@@ -15,11 +15,11 @@ console_handler.setLevel(logging.INFO)
 formatter = colorlog.ColoredFormatter(
     "%(log_color)s%(asctime)s - %(levelname)s - %(message)s",
     log_colors={
-        'DEBUG': 'cyan',
-        'INFO': 'white',
-        'WARNING': 'yellow',
-        'ERROR': 'red',
-        'CRITICAL': 'red,bg_white',
+        "DEBUG": "cyan",
+        "INFO": "white",
+        "WARNING": "yellow",
+        "ERROR": "red",
+        "CRITICAL": "red,bg_white",
     })
 
 console_handler.setFormatter(formatter)
@@ -77,12 +77,15 @@ class USBClass(Enum):
 
 
 def main() -> None:
+    print_header()
+
     # Read initial devices
-    logger.info("Initial devices:")
     for device in usb.core.find(find_all=True):
         read_devices.append(device)
-        print_device_information(device)
-    logger.info("")
+
+    # Print a warning
+    logger.warning("Plugin the device at your own risk!")
+    logger.info("Ready for a device...")
 
     # Create a separate thread for monitoring devices
     monitor_thread = threading.Thread(target=monitor_devices)
@@ -95,7 +98,7 @@ def monitor_devices():
         for device in new_devices:
             if device in read_devices:
                 continue
-            logger.warning("New device found:")
+            logger.info("New device found:")
             read_devices.append(device)
             print_device_information(device)
             read_input_from_device(device)
@@ -109,6 +112,19 @@ def print_device_information(device: usb.core.Device) -> None:
     logger.info(device_info)
 
 
+def print_header() -> None:
+    header = """
+      _____________________________
+     /|         |                  |
+    |||  []     | Bad USB Busber   |
+    |||         | v0.1             |
+    |||  []     | 08-04-2024       |
+    |||_________|__________________|
+    |/_________/__________________/
+    """
+    print(header)
+
+
 def read_input_from_device(device: usb.core.Device) -> None:
     endpoint = device[0][(0,0)][0]
     interface_number = \
@@ -118,14 +134,16 @@ def read_input_from_device(device: usb.core.Device) -> None:
     if device.is_kernel_driver_active(interface_number):
         try:
             device.detach_kernel_driver(interface_number)
-            logger.warning("Kernel driver detached from interface" \
-                           f"{interface_number}")
+            logger.info("Kernel driver detached from interface" \
+                        f"{interface_number}")
         except usb.core.USBError as e:
             logger.error(f"Error detaching kernel driver: {e}")
             return
 
     # Claim the interface
     ascii_data = ""
+    device_id = f"Device: Vendor ID {device.idVendor} " \
+                f"Product ID {device.idProduct}"
     while True:
         try:
             data = device.read(endpoint.bEndpointAddress,
@@ -133,12 +151,17 @@ def read_input_from_device(device: usb.core.Device) -> None:
                                timeout=DEVICE_READ_TIMEOUT_S)
             ascii_data += "".join(
                 [SCANCODES.get(code, "") for code in data[2:] if code != 0])
-            logger.info(ascii_data)
+            logger.warning(f"{device_id}: {ascii_data}")
         except usb.core.USBError as e:
-            if e.errno == 19:
-                logger.error("Device disconnected")
-                break
-            logger.error(f"Error reading data from device: {e}")
+            match e.errno:
+                case 19:  # Device disconnected
+                    logger.error(f"Disconnected! {device_id}")
+                    break
+                case 110:  # Operation timed out
+                    logger.debug(f"{device_id} Error reading data from device: {e}")
+                case _:
+                    logger.error(f"{device_id} {e}")
+                    break
             continue
 
 
