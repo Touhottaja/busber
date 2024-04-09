@@ -1,6 +1,9 @@
 # busber
 Bad USB BusteR - Tool for checking malicious USB devices
 
+## Demo
+[![Busber demo](https://img.youtube.com/vi/T3OAkjLCleU/0.jpg)](https://www.youtube.com/watch?v=T3OAkjLCleU)
+
 ## Installation
 1. Create a Python venv:
 ```sh
